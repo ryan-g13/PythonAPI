@@ -1,5 +1,4 @@
-from fastapi import FastAPI
-from fastapi.params import Body
+from fastapi import FastAPI, status, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from random import randrange
@@ -8,34 +7,66 @@ app = FastAPI()
 
 
 class Post(BaseModel):
-  title: str
-  content: str
-  published: bool = False
-  rating: Optional[int] = None
+    title: str
+    content: str
+    published: bool = False
+    rating: Optional[int] = None
 
 my_posts = [
-  {"title": "My first post!", "content": "I should probably put content here", "published": True, "id": 1},
-  {"title": "I am a wizard", "content": "Harry Potter Ipsum", "published": False, "rating": 1, "id": 2},
+    {"title": "My first post!", "content": "I should probably put content here", "published": True, "id": 1},
+    {"title": "I am a wizard", "content": "Harry Potter Ipsum", "published": False, "rating": 1, "id": 2},
 ]
+
+def get_index(id:int):
+    for i, post in enumerate(my_posts):
+        if id == post['id']:
+            return i
 
 @app.get("/")
 def root():
-  return {"message": "Hola Senor"}
+    return {"message": "Hola Senor"}
 
 @app.get("/posts")
 def get_posts():
-  return {"data": my_posts}
+    return {"data": my_posts}
 
-@app.post("/posts")
+@app.post("/posts", status_code=status.HTTP_201_CREATED)
 def create_post(new_post: Post):
-  post_dict = new_post.model_dump()
-  post_dict["id"] = randrange(2,4000000)
-  my_posts.append(post_dict)
-  return {"data": post_dict}
+    post_dict = new_post.model_dump()
+    post_dict["id"] = randrange(2,4000000)
+    my_posts.append(post_dict)
+    return {"data": post_dict}
+
+# Needs to be above /posts/{id} otherwise validation fails.
+@app.get("/posts/latest")
+def get_latest_post():
+    return my_posts[len(my_posts) - 1]
 
 @app.get("/posts/{id}")
-def get_post(id):
-  for post in my_posts:
-    if int(id) == post["id"]:
-      return post
-  return {"message": f"No post with ID {id} found"}
+def get_post(id: int):
+    for post in my_posts:
+        if id == post["id"]:
+            return post
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No post with ID {id} found")
+
+@app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_post(id: int):
+    for post in my_posts:
+        if id == post["id"]:
+            my_posts.remove(post)
+            return { "status_code": status.HTTP_204_NO_CONTENT }
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No post with ID {id} found")
+
+
+@app.put("/posts/{id}")
+def update_post(id: int, post: Post):
+    index = get_index(id)
+
+    if index is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No post with ID {id} found")
+
+    post_dict = post.model_dump()
+    post_dict["id"] = id
+    my_posts[index] = post_dict
+
+    return { "data": post_dict }
