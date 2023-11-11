@@ -2,6 +2,8 @@ from fastapi import FastAPI, status, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from random import randrange
+import psycopg
+from psycopg.rows import dict_row
 
 app = FastAPI()
 
@@ -17,6 +19,20 @@ my_posts = [
     {"title": "I am a wizard", "content": "Harry Potter Ipsum", "published": False, "rating": 1, "id": 2},
 ]
 
+# For retry you can use a while loop 
+# while True: 
+try:
+    with psycopg.connect("dbname=fastapi user=postgres password=******** host=localhost", row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            print("DB COnnection Succcess")
+            # cur.execute("SELECT * FROM posts")
+            # cur.fetchone()
+            # for record in cur: 
+            #     print(record)
+            # break
+except Exception as error:
+    print("DB Connection failed: ", error)
+
 def get_index(id:int):
     for i, post in enumerate(my_posts):
         if id == post['id']:
@@ -28,6 +44,10 @@ def root():
 
 @app.get("/posts")
 def get_posts():
+    cur1 = conn.cursor()
+    cur1.execute("SELECT * FROM posts")
+    sql_posts = cur1.fetchall()
+    print(sql_posts)
     return {"data": my_posts}
 
 @app.post("/posts", status_code=status.HTTP_201_CREATED)

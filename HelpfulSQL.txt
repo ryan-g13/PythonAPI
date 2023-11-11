@@ -1,0 +1,7 @@
+SELECT * FROM products WHERE inventory > 0 ORDER BY price desc;
+
+INSERT INTO products (name, price, inventory) VALUES ('Xbox Controller', 74, 9) RETURNING column_name;
+
+DELETE FROM products WHERE id =  19 RETURNING; 
+
+UPDATE products SET name = 'New  Field', price = 32 WHERE id = 11 RETURNING *;
