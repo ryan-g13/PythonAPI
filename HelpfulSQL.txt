@@ -5,3 +5,5 @@ INSERT INTO products (name, price, inventory) VALUES ('Xbox Controller', 74, 9) 
 DELETE FROM products WHERE id =  19 RETURNING; 
 
 UPDATE products SET name = 'New  Field', price = 32 WHERE id = 11 RETURNING *;
+
+INSERT INTO posts (title, content, published) VALUES (%s, %s, %s, %s) RETURNING * """
