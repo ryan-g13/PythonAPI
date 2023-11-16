@@ -1,23 +1,17 @@
 import time
-from typing import Optional
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from pydantic import BaseModel
+from typing import List
 from fastapi import FastAPI, status, HTTPException, Depends
 from sqlalchemy.orm import Session
 from . import models
 from .database import engine, get_db
+from .schemas import CreatePost, PostResponse, UserBase, UserResponse
 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# Schema of a request
-class Post(BaseModel):
-    title: str
-    content: str
-    published: bool = False
-    rating: Optional[int] = None
 
 while True:
     try:
@@ -31,18 +25,18 @@ while True:
 
 @app.get("/")
 def root():
-    return {"message": "Hola Senor"}
+    return {"message": "Hola Senor, Como esta?"}
 
-@app.get("/posts")
+@app.get("/posts", response_model=List[PostResponse])
 def get_posts(db: Session = Depends(get_db)):
     # with sql vs ORM 
     # cursor.execute("SELECT * FROM posts")
     # sql_posts = cursor.fetchall()
     sql_posts = db.query(models.Post).all()
-    return {"data": sql_posts}
+    return sql_posts
 
-@app.post("/posts", status_code=status.HTTP_201_CREATED)
-def create_post(new_post: Post, db: Session = Depends(get_db)):
+@app.post("/posts", status_code=status.HTTP_201_CREATED, response_model=PostResponse)
+def create_post(new_post: CreatePost, db: Session = Depends(get_db)):
     # V1
     # cursor.execute(""" INSERT INTO posts (title, content, published) VALUES (%s, %s, %s, %s) RETURNING * """, (new_post.title, new_post.content, new_post.published, new_post.rating))
     # created_post = cursor.fetchone()
@@ -54,17 +48,19 @@ def create_post(new_post: Post, db: Session = Depends(get_db)):
     db.add(created_post)
     db.commit()
     db.refresh(created_post)
-    return {"data": created_post }
+    return created_post
 
 # Needs to be above /posts/{id} otherwise validation fails.
 @app.get("/posts/latest")
-def get_latest_post():
-    cursor.execute("""SELECT * FROM posts ORDER BY created_at DESC""")
-    latest_post = cursor.fetchone()
-    print(latest_post)
-    return { "data": latest_post }
+def get_latest_post(db: Session = Depends(get_db)):
+    # V1
+    # cursor.execute("""SELECT * FROM posts ORDER BY created_at DESC""")
+    # latest_post = cursor.fetchone()
+    # print(latest_post)
+    latest_post = db.query(models.Post).order_by(models.Post.created_at.desc()).first()
+    return latest_post
 
-@app.get("/posts/{id}")
+@app.get("/posts/{id}", response_model=PostResponse)
 def get_post(id: int, db: Session = Depends(get_db)):
     # V1 
     # cursor.execute("""SELECT * FROM posts WHERE id = %s """, (str(id),))
@@ -74,7 +70,7 @@ def get_post(id: int, db: Session = Depends(get_db)):
 
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No post with ID {id} found")
-    return {"post_detail": post}
+    return post
 
 @app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_post(id: int, db: Session = Depends(get_db)):
@@ -92,9 +88,9 @@ def delete_post(id: int, db: Session = Depends(get_db)):
 
     return { "status_code": status.HTTP_204_NO_CONTENT }
 
-@app.put("/posts/{id}")
-def update_post(id: int, post: Post, db: Session = Depends(get_db)):
-    # V1 
+@app.put("/posts/{id}", response_model=PostResponse)
+def update_post(id: int, post: CreatePost, db: Session = Depends(get_db)):
+    # V1
     # cursor.execute("""UPDATE posts SET title = %s, content = %s, published = %s, rating = %s WHERE id = %s RETURNING * """, (post.title, post.content, post.published, post.rating, str(id),))
     # updated_post = cursor.fetchone()
     # conn.commit()
@@ -108,4 +104,14 @@ def update_post(id: int, post: Post, db: Session = Depends(get_db)):
     post_query.update(post.model_dump(), synchronize_session=False)
     db.commit()
 
-    return { "data": post_query.first() }
+    return post_query.first()
+
+
+@app.post("/users", status_code=status.HTTP_201_CREATED, response_model=UserResponse)
+def create_user(user: UserBase, db: Session = Depends(get_db)):
+    created_user = models.User(**user.model_dump())
+    db.add(created_user)
+    db.commit()
+    db.refresh(created_user)
+
+    return created_user
