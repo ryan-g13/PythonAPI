@@ -1,9 +1,9 @@
 from typing import List
 from fastapi import status, HTTPException, Depends, APIRouter
 from sqlalchemy.orm import Session
-from .. import models
-from ..schemas import PostResponse, CreatePost
-from ..database import get_db
+from app import models, oauth2
+from app.schemas import PostResponse, CreatePost
+from app.database import get_db
 
 router = APIRouter(
     prefix='/posts',
@@ -11,7 +11,7 @@ router = APIRouter(
 )
 
 @router.get("/", response_model=List[PostResponse])
-def get_posts(db: Session = Depends(get_db)):
+def get_posts(db: Session = Depends(get_db), current_user = Depends(oauth2.get_current_user)):
     # with sql vs ORM 
     # cursor.execute("SELECT * FROM posts")
     # sql_posts = cursor.fetchall()
@@ -19,7 +19,7 @@ def get_posts(db: Session = Depends(get_db)):
     return sql_posts
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=PostResponse)
-def create_post(new_post: CreatePost, db: Session = Depends(get_db)):
+def create_post(new_post: CreatePost, db: Session = Depends(get_db), current_user = Depends(oauth2.get_current_user)):
     # V1
     # cursor.execute(""" INSERT INTO posts (title, content, published) VALUES (%s, %s, %s, %s) RETURNING * """, (new_post.title, new_post.content, new_post.published, new_post.rating))
     # created_post = cursor.fetchone()
@@ -27,6 +27,7 @@ def create_post(new_post: CreatePost, db: Session = Depends(get_db)):
 
     # V2 without unpacking dictionary
     # created_post = models.Post(title=new_post.title, content=new_post.content, published=new_post.published, rating=new_post.rating)
+    print(current_user)
     created_post = models.Post(**new_post.model_dump())
     db.add(created_post)
     db.commit()
@@ -35,7 +36,7 @@ def create_post(new_post: CreatePost, db: Session = Depends(get_db)):
 
 # Needs to be above /posts/{id} otherwise validation fails.
 @router.get("/latest")
-def get_latest_post(db: Session = Depends(get_db)):
+def get_latest_post(db: Session = Depends(get_db), current_user = Depends(oauth2.get_current_user)):
     # V1
     # cursor.execute("""SELECT * FROM posts ORDER BY created_at DESC""")
     # latest_post = cursor.fetchone()
@@ -44,7 +45,7 @@ def get_latest_post(db: Session = Depends(get_db)):
     return latest_post
 
 @router.get("/{id}", response_model=PostResponse)
-def get_post(id: int, db: Session = Depends(get_db)):
+def get_post(id: int, db: Session = Depends(get_db), current_user = Depends(oauth2.get_current_user)):
     # V1 
     # cursor.execute("""SELECT * FROM posts WHERE id = %s """, (str(id),))
     # post = cursor.fetchone()
@@ -56,7 +57,7 @@ def get_post(id: int, db: Session = Depends(get_db)):
     return post
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_post(id: int, db: Session = Depends(get_db)):
+def delete_post(id: int, db: Session = Depends(get_db), current_user = Depends(oauth2.get_current_user)):
     # V1
     # cursor.execute("""DELETE FROM posts WHERE id = %s RETURNING * """, (str(id),))
     # deleted_post = cursor.fetchone()
@@ -72,7 +73,7 @@ def delete_post(id: int, db: Session = Depends(get_db)):
     return { "status_code": status.HTTP_204_NO_CONTENT }
 
 @router.put("/{id}", response_model=PostResponse)
-def update_post(id: int, post: CreatePost, db: Session = Depends(get_db)):
+def update_post(id: int, post: CreatePost, db: Session = Depends(get_db), current_user = Depends(oauth2.get_current_user)):
     # V1
     # cursor.execute("""UPDATE posts SET title = %s, content = %s, published = %s, rating = %s WHERE id = %s RETURNING * """, (post.title, post.content, post.published, post.rating, str(id),))
     # updated_post = cursor.fetchone()
