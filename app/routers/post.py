@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import status, HTTPException, Depends, APIRouter
 from sqlalchemy.orm import Session
 from app import models, oauth2
@@ -11,11 +11,11 @@ router = APIRouter(
 )
 
 @router.get("/", response_model=List[PostResponse])
-def get_posts(db: Session = Depends(get_db), current_user = Depends(oauth2.get_current_user)):
+def get_posts(db: Session = Depends(get_db), current_user = Depends(oauth2.get_current_user), limit:int = 10, skip:int = 0, search: Optional[str] = ""):
     # with sql vs ORM 
     # cursor.execute("SELECT * FROM posts")
     # sql_posts = cursor.fetchall()
-    sql_posts = db.query(models.Post).all()
+    sql_posts = db.query(models.Post).filter(models.Post.title.contains(search)).limit(limit).offset(skip).all()
     return sql_posts
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=PostResponse)
@@ -27,8 +27,7 @@ def create_post(new_post: CreatePost, db: Session = Depends(get_db), current_use
 
     # V2 without unpacking dictionary
     # created_post = models.Post(title=new_post.title, content=new_post.content, published=new_post.published, rating=new_post.rating)
-    print(current_user)
-    created_post = models.Post(**new_post.model_dump())
+    created_post = models.Post(user_id = current_user.user_id, **new_post.model_dump())
     db.add(created_post)
     db.commit()
     db.refresh(created_post)
@@ -63,11 +62,15 @@ def delete_post(id: int, db: Session = Depends(get_db), current_user = Depends(o
     # deleted_post = cursor.fetchone()
     # conn.commit()
 
-    deleted_post = db.query(models.Post).filter(models.Post.id == id)
+    delete_query = db.query(models.Post).filter(models.Post.id == id)
+    deleted_post = delete_query.first()
 
-    if deleted_post.first() is None:
+    if deleted_post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No post with ID {id} found")
-    deleted_post.delete(synchronize_session=False)
+    if deleted_post.user_id != current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to perform requested action")
+
+    delete_query.delete(synchronize_session=False)
     db.commit()
 
     return { "status_code": status.HTTP_204_NO_CONTENT }
@@ -79,13 +82,15 @@ def update_post(id: int, post: CreatePost, db: Session = Depends(get_db), curren
     # updated_post = cursor.fetchone()
     # conn.commit()
 
-    post_query = db.query(models.Post).filter(models.Post.id == id)
-    updated_post = post_query.first()
+    update_query = db.query(models.Post).filter(models.Post.id == id)
+    updated_post = update_query.first()
 
     if updated_post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No post with ID {id} found")
+    if updated_post.user_id != current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to perform requested action")
 
-    post_query.update(post.model_dump(), synchronize_session=False)
+    update_query.update(post.model_dump(), synchronize_session=False)
     db.commit()
 
-    return post_query.first()
+    return update_query.first()
