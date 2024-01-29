@@ -40,6 +40,13 @@ class PostResponse(PostBase):
     class config:
         orm_mode = True
 
+class PostVote(BaseModel):
+    Post: PostResponse
+    votes: int
+
+    class config:
+        orm_mode = True
+
 class Token(BaseModel):
     access_token: str
     token_type: str

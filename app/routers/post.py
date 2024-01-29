@@ -1,8 +1,9 @@
 from typing import List, Optional
 from fastapi import status, HTTPException, Depends, APIRouter
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app import models, oauth2
-from app.schemas import PostResponse, CreatePost
+from app.schemas import PostResponse, CreatePost, PostVote
 from app.database import get_db
 
 router = APIRouter(
@@ -10,13 +11,17 @@ router = APIRouter(
     tags=['Posts']
 )
 
-@router.get("/", response_model=List[PostResponse])
+@router.get("/", response_model=List[PostVote])
+# @router.get("/")
 def get_posts(db: Session = Depends(get_db), current_user = Depends(oauth2.get_current_user), limit:int = 10, skip:int = 0, search: Optional[str] = ""):
     # with sql vs ORM 
     # cursor.execute("SELECT * FROM posts")
     # sql_posts = cursor.fetchall()
-    sql_posts = db.query(models.Post).filter(models.Post.title.contains(search)).limit(limit).offset(skip).all()
-    return sql_posts
+    # sql_posts = db.query(models.Post).filter(models.Post.title.contains(search)).limit(limit).offset(skip).all()
+    
+    # adding new field votes to the sql query 
+    results = db.query(models.Post, func.count(models.Vote.post_id).label('votes')).join(models.Vote, models.Vote.post_id == models.Post.id, isouter=True).group_by(models.Post.id).filter(models.Post.title.contains(search)).limit(limit).offset(skip).all()
+    return results
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=PostResponse)
 def create_post(new_post: CreatePost, db: Session = Depends(get_db), current_user = Depends(oauth2.get_current_user)):
@@ -43,13 +48,13 @@ def get_latest_post(db: Session = Depends(get_db), current_user = Depends(oauth2
     latest_post = db.query(models.Post).order_by(models.Post.created_at.desc()).first()
     return latest_post
 
-@router.get("/{id}", response_model=PostResponse)
+@router.get("/{id}", response_model=PostVote)
 def get_post(id: int, db: Session = Depends(get_db), current_user = Depends(oauth2.get_current_user)):
     # V1 
     # cursor.execute("""SELECT * FROM posts WHERE id = %s """, (str(id),))
     # post = cursor.fetchone()
 
-    post = db.query(models.Post).filter(models.Post.id == id).first()
+    post = db.query(models.Post, func.count(models.Vote.post_id).label('votes')).join(models.Vote, models.Vote.post_id == models.Post.id, isouter=True).group_by(models.Post.id).filter(models.Post.id == id).first()
 
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No post with ID {id} found")
